@@ -39,7 +39,7 @@ setup(
     long_description=readme + '\n\n' + history,
     author='django-telegrambot',
     author_email='francesco.scarlato@gmail.com',
-    url='https://github.com/Necrobsd/django-telegrambot',
+    url='https://github.com/JungDev/django-telegrambot',
     packages=[
         'django_telegrambot',
     ],
