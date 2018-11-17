@@ -6,7 +6,9 @@ from django.conf import settings
 import importlib
 import telegram
 from django.utils.module_loading import module_has_submodule
+from telegram.ext import messagequeue as mq
 from telegram.ext import Dispatcher
+from telegram.utils.request import Request
 from telegram.ext import Updater
 from telegram.error import InvalidToken, TelegramError
 import os.path
@@ -18,6 +20,29 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_MODULE_NAME = 'telegrambot'
 WEBHOOK_MODE, POLLING_MODE = range(2)
 
+
+class MQBot(telegram.bot.Bot):
+    '''Подкласс бота переопределяющий метод отправки соощений через очередь MQ'''
+    def __init__(self, *args, is_queued_def=True, mqueue=None, **kwargs):
+        super(MQBot, self).__init__(*args, **kwargs)
+        # below 2 attributes should be provided for decorator usage
+        self._is_messages_queued_default = is_queued_def
+        self._msg_queue = mqueue or mq.MessageQueue()
+
+    def __del__(self):
+        try:
+            self._msg_queue.stop()
+        except:
+            pass
+        super(MQBot, self).__del__()
+
+    @mq.queuedmessage
+    def send_message(self, *args, **kwargs):
+        '''Wrapped method would accept new `queued` and `isgroup`
+        OPTIONAL arguments'''
+        return super(MQBot, self).send_message(*args, **kwargs)
+
+
 class classproperty(property):
     def __get__(self, obj, objtype=None):
         return super(classproperty, self).__get__(objtype)
@@ -25,6 +50,7 @@ class classproperty(property):
         super(classproperty, self).__set__(type(obj), value)
     def __delete__(self, obj):
         super(classproperty, self).__delete__(type(obj))
+
 
 class DjangoTelegramBot(AppConfig):
     name = 'django_telegrambot'
@@ -163,10 +189,12 @@ class DjangoTelegramBot(AppConfig):
 
             allowed_updates = b.get('ALLOWED_UPDATES', None)
             timeout = b.get('TIMEOUT', None)
-
+            q = mq.MessageQueue(all_burst_limit=29, all_time_limit_ms=1020, group_burst_limit=19,
+                                group_time_limit_ms=60100)
+            request = Request(con_pool_size=8)
             if self.mode == WEBHOOK_MODE:
                 try:
-                    bot = telegram.Bot(token=token)
+                    bot = MQBot(token=token, request=request, mqueue=q)
                     DjangoTelegramBot.dispatchers.append(Dispatcher(bot, None, workers=0))
                     hookurl = '{}/{}/{}/'.format(webhook_site, webhook_base, token)
 
@@ -188,7 +216,7 @@ class DjangoTelegramBot(AppConfig):
 
             else:
                 try:
-                    updater = Updater(token=token)
+                    updater = Updater(bot=MQBot(token=token, request=request, mqueue=q))
                     bot = updater.bot
                     bot.delete_webhook()
                     DjangoTelegramBot.updaters.append(updater)
