@@ -37,7 +37,7 @@ Quickstart
 
 Install django-telegrambot::
 
-    pip install django-telegrambot
+    pip install git+https://github.com/Necrobsd/django-telegrambot.git
 
 Configure your installation
 ---------------------------
@@ -154,6 +154,20 @@ Then use it in a project creating a module ``telegrambot.py`` in your app ::
 
         def echo(bot, update):
             bot.sendMessage(update.message.chat_id, text=update.message.text)
+
+        # Отправка соощений без использования очереди (по-умолчанию: queued=True)
+        # Sending without MQ queue (by default: queued=True)
+        def echo(bot, update):
+            bot.sendMessage(update.message.chat_id, text=update.message.text, queued=False)
+
+        # Отправка в группы, используя очередь (по-умолчанию: isgroup=False)
+        # Sending to groups using MQ queue (by default: isgroup=False)
+        def echo(bot, update):
+            chat_id = update.message.chat_id
+            is_group = False
+            if chat_id < 0:
+                is_group = True
+            bot.sendMessage(update.message.chat_id, text=update.message.text, isgroup=is_group)
 
 
         def error(bot, update, error):
